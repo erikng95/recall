@@ -30,6 +30,16 @@ async function handleShareTarget() {
 }
 
 void handleShareTarget();
+
+// While typing on a phone, hide the bottom nav so the keyboard leaves more room.
+const isField = (el: EventTarget | null) =>
+  el instanceof HTMLElement && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'file'].includes((el as HTMLInputElement).type)) || el.isContentEditable);
+document.addEventListener('focusin', (e) => {
+  if (isField(e.target)) document.body.classList.add('typing');
+});
+document.addEventListener('focusout', (e) => {
+  if (isField(e.target)) document.body.classList.remove('typing');
+});
 void useStore.getState().init();
 
 createRoot(document.getElementById('root')!).render(

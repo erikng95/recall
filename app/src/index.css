@@ -1112,3 +1112,15 @@ hr.sep {
     bottom: 0;
   }
 }
+
+@media (max-width: 899px) {
+  body.typing .bottomnav {
+    display: none;
+  }
+  body.typing .main {
+    padding-bottom: 16px;
+  }
+  body.typing .sticky-actions {
+    bottom: 0;
+  }
+}

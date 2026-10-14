@@ -36,11 +36,9 @@ function contentsUrl(cfg: GitHubConfig) {
 }
 
 function headers(cfg: GitHubConfig, accept = 'application/vnd.github+json'): Record<string, string> {
-  return {
-    Authorization: `Bearer ${cfg.token}`,
-    Accept: accept,
-    'X-GitHub-Api-Version': '2022-11-28',
-  };
+  const h: Record<string, string> = { Accept: accept, 'X-GitHub-Api-Version': '2022-11-28' };
+  if (cfg.token) h.Authorization = `Bearer ${cfg.token}`;
+  return h;
 }
 
 function utf8ToBase64(s: string): string {
