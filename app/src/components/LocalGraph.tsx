@@ -4,6 +4,7 @@ import ForceGraph from 'force-graph';
 import { useStore } from '../store.ts';
 import {
   adjacencyOf,
+  gravityForce,
   buildGraphModel,
   neighborhood,
   paintLink,
@@ -79,6 +80,8 @@ function LocalGraphView({ noteId, depth, height }: { noteId: string; depth: numb
       .minZoom(0.5)
       .maxZoom(2.4)
       .enableNodeDrag(false)
+      .warmupTicks(80)
+      .cooldownTime(2000)
       .enableZoomInteraction(false)
       .enablePanInteraction(false)
       .nodeCanvasObject((node, ctx, scale) => paintNode(node, ctx, scale, view.current))
@@ -96,6 +99,7 @@ function LocalGraphView({ noteId, depth, height }: { noteId: string; depth: numb
 
     g.d3Force('charge')?.strength(-90);
     g.d3Force('link')?.distance(40);
+    g.d3Force('gravity', gravityForce() as unknown as Parameters<typeof g.d3Force>[1]);
     graphRef.current = g;
 
     const ro = new ResizeObserver(() => {
@@ -117,6 +121,7 @@ function LocalGraphView({ noteId, depth, height }: { noteId: string; depth: numb
     if (!g) return;
     view.current.adj = model.adj;
     g.graphData({ nodes: model.nodes, links: model.links });
+    setTimeout(() => graphRef.current?.zoomToFit(0, 24), 60);
   }, [model]);
 
   useEffect(() => {

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ForceGraph from 'force-graph';
-import { Eye, EyeOff, Network, Plus, Search, X } from 'lucide-react';
+import { Eye, EyeOff, Maximize2, Network, Plus, Search, X } from 'lucide-react';
 import { live, type Topic } from '@shared/vault.ts';
 import Topbar from '../components/Topbar.tsx';
 import { topicPath, useStore } from '../store.ts';
 import {
   buildGraphModel,
   computeFocus,
+  gravityForce,
   notesInTopic,
   paintLink,
   paintNode,
@@ -117,15 +118,19 @@ export default function Graph() {
     [select, cache],
   );
 
+  const fitPending = useRef(true);
+
   // Create the force graph once; it is updated through graphData() afterwards.
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    let fitted = false;
-
     const g = new ForceGraph<GraphNode, GraphLink>(el)
       .width(el.clientWidth)
       .height(el.clientHeight)
+      // Settle most of the layout before the first paint, and don't simulate for long:
+      // on a phone you should see the whole graph immediately.
+      .warmupTicks(80)
+      .cooldownTime(2500)
       .minZoom(0.25)
       .maxZoom(6)
       .nodeCanvasObject((node, ctx, scale) => paintNode(node, ctx, scale, view.current))
@@ -146,13 +151,14 @@ export default function Graph() {
       })
       .onBackgroundClick(() => select(null))
       .onEngineStop(() => {
-        if (fitted) return;
-        fitted = true;
-        g.zoomToFit(400, 40);
+        if (!fitPending.current) return;
+        fitPending.current = false;
+        g.zoomToFit(400, 70);
       });
 
     g.d3Force('charge')?.strength(-110);
     g.d3Force('link')?.distance(46);
+    g.d3Force('gravity', gravityForce() as unknown as Parameters<typeof g.d3Force>[1]);
     graphRef.current = g;
 
     const ro = new ResizeObserver(() => {
@@ -174,12 +180,18 @@ export default function Graph() {
     const g = graphRef.current;
     if (!g) return;
     view.current.adj = model.adj;
+    // Few notes: always label them all.
+    view.current.labelAll = model.nodes.length <= 40;
     computeFocus(view.current);
     g.graphData({ nodes: model.nodes, links: model.links });
     const pending = pendingFocus.current;
     if (pending) {
       pendingFocus.current = null;
       focusOn(pending);
+    } else {
+      // Fit now (layout is pre-warmed) and again once the simulation settles.
+      fitPending.current = true;
+      setTimeout(() => graphRef.current?.zoomToFit(300, 70), 60);
     }
   }, [model, focusOn]);
 
@@ -229,6 +241,9 @@ export default function Graph() {
   return (
     <div className="page wide gr-page">
       <Topbar title="Graph">
+        <button type="button" className="iconbtn" aria-label="Fit graph to screen" title="Fit to screen" onClick={() => graphRef.current?.zoomToFit(400, 70)}>
+          <Maximize2 size={19} />
+        </button>
         <button
           type="button"
           className={`iconbtn${showUnlinked ? ' active' : ''}`}

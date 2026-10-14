@@ -26,9 +26,11 @@ export default function Editor({ value, onChange, placeholder, excludeTitle, aut
     el.style.height = `${el.scrollHeight + 2}px`;
   }, [value]);
 
+  // Focus only on mount — never steal focus later (e.g. from the title while typing).
   useEffect(() => {
     if (autoFocus) ref.current?.focus();
-  }, [autoFocus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Link autocomplete: text between the last unmatched "[[" and the caret.
   const linkQuery = useMemo(() => {

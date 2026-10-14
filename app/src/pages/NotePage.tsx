@@ -82,7 +82,8 @@ function NoteEditor({ note, onDone }: { note: Note; onDone: () => void }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const latest = useRef({ title, body });
   latest.current = { title, body };
-  const isNew = note.title === 'Untitled';
+  // Decided once on open: re-evaluating after the first autosave would steal focus mid-typing.
+  const [isNew] = useState(() => note.title === 'Untitled');
   const titleRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = titleRef.current;

@@ -348,3 +348,20 @@ export function paintLink(link: GraphLink, ctx: CanvasRenderingContext2D, scale:
   ctx.stroke();
   ctx.globalAlpha = 1;
 }
+
+// ---------- Layout ----------
+
+/** Weak pull toward the origin so unlinked notes stay near the cluster instead of drifting off-screen. */
+export function gravityForce(strength = 0.06) {
+  let nodes: GraphNode[] = [];
+  const force = (alpha: number) => {
+    for (const n of nodes) {
+      n.vx = (n.vx ?? 0) - (n.x ?? 0) * strength * alpha;
+      n.vy = (n.vy ?? 0) - (n.y ?? 0) * strength * alpha;
+    }
+  };
+  force.initialize = (ns: GraphNode[]) => {
+    nodes = ns;
+  };
+  return force;
+}
