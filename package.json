@@ -8,6 +8,7 @@
     "build": "npm --prefix app run build",
     "preview": "npm --prefix app run preview",
     "test": "npm --prefix mcp test && node scripts/test-shared.ts",
+    "test:remote": "npm --prefix mcp-remote test",
     "mcp": "node mcp/src/index.ts"
   }
 }

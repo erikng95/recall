@@ -16,7 +16,7 @@ import {
   type Note,
   type Vault,
 } from '../../shared/vault.ts';
-import { StorageConfigError, type Storage } from './storage.ts';
+import { StorageConfigError, type Storage } from './storage-core.ts';
 import {
   QUALITY_VALUES,
   RecallError,

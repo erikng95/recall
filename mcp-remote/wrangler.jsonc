@@ -1,0 +1,22 @@
+// Cloudflare Worker config for the remote Recall MCP server. See ../README.md ("Claude on your phone").
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "recall-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // Required by the OAuth provider for Client ID Metadata Documents (blocks fetches to private addresses).
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  "kv_namespaces": [
+    // OAuth clients, grants and tokens (stored hashed/encrypted). No id needed: the first
+    // `wrangler deploy` creates the namespace and later deploys reuse it.
+    { "binding": "OAUTH_KV" }
+  ],
+  "vars": {
+    "ALLOWED_GITHUB_USER": "erikng95",
+    "RECALL_GITHUB_REPO": "erikng95/recall-vault"
+  }
+  // Secrets (never in this file): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, RECALL_GITHUB_TOKEN
+  //   npx wrangler secret put <NAME>
+  // For `wrangler dev`, put them in .dev.vars instead (git-ignored).
+}

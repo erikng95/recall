@@ -1,0 +1,27 @@
+{
+  "name": "recall-mcp-remote",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Remote (Streamable HTTP + OAuth) Recall MCP server for Cloudflare Workers, for claude.ai custom connectors",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node test/worker.test.ts && node test/workerd.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261014.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.151.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "workerd": true
+  }
+}

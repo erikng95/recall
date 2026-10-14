@@ -1,0 +1,12 @@
+// Test-only Worker config: the real Worker code, but GitHub (sign-in and the vault) is the fake from
+// fake-github.ts on 127.0.0.1, so global_fetch_strictly_public is left off here.
+{
+  "name": "recall-mcp-test",
+  "main": "workerd-entry.ts",
+  "compatibility_date": "2026-10-01",
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "test" }],
+  "vars": {
+    "ALLOWED_GITHUB_USER": "erikng95",
+    "RECALL_GITHUB_REPO": "owner/vault"
+  }
+}
