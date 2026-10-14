@@ -9,6 +9,8 @@ export interface GitHubConfig {
   repo: string;
   branch?: string; // default: repo default branch
   path?: string; // default: vault.json
+  userAgent?: string; // sent as User-Agent; needed where fetch adds none (Cloudflare Workers), unset in browsers
+  apiUrl?: string; // default: https://api.github.com (tests point this at a fake)
 }
 
 export interface RemoteVault {
@@ -30,14 +32,19 @@ function filePath(cfg: GitHubConfig) {
   return (cfg.path || 'vault.json').replace(/^\/+/, '');
 }
 
+function repoUrl(cfg: GitHubConfig) {
+  return `${cfg.apiUrl ?? API}/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}`;
+}
+
 function contentsUrl(cfg: GitHubConfig) {
   const p = filePath(cfg).split('/').map(encodeURIComponent).join('/');
-  return `${API}/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${p}`;
+  return `${repoUrl(cfg)}/contents/${p}`;
 }
 
 function headers(cfg: GitHubConfig, accept = 'application/vnd.github+json'): Record<string, string> {
   const h: Record<string, string> = { Accept: accept, 'X-GitHub-Api-Version': '2022-11-28' };
   if (cfg.token) h.Authorization = `Bearer ${cfg.token}`;
+  if (cfg.userAgent) h['User-Agent'] = cfg.userAgent;
   return h;
 }
 
@@ -77,7 +84,7 @@ export async function fetchRemoteVault(cfg: GitHubConfig): Promise<RemoteVault |
   const res = await fetch(contentsUrl(cfg) + ref, { headers: headers(cfg), cache: 'no-store' });
   if (res.status === 404) {
     // Distinguish "file missing" from "repo missing / no access".
-    const repoRes = await fetch(`${API}/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}`, {
+    const repoRes = await fetch(repoUrl(cfg), {
       headers: headers(cfg),
       cache: 'no-store',
     });
