@@ -118,7 +118,8 @@ let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Keep auto-generated cloze cards in sync with ==highlights== in the note body. */
-function syncAutoCards(v: Vault, note: Note, now: number) {
+function syncAutoCards(v: Vault, note: Note, now: number): boolean {
+  let changed = false;
   const specs = note.deleted ? [] : extractClozes(note);
   const wanted = new Set<ID>();
   for (const s of specs) {
@@ -137,15 +138,43 @@ function syncAutoCards(v: Vault, note: Note, now: number) {
         createdAt: now,
         updatedAt: now,
       };
+      changed = true;
     } else if (existing.deleted || existing.front !== s.front || existing.back !== s.back) {
       v.cards[id] = { ...existing, front: s.front, back: s.back, deleted: false, updatedAt: now };
+      changed = true;
     }
   }
   for (const c of Object.values(v.cards)) {
     if (c.noteId === note.id && c.auto && !c.deleted && !wanted.has(c.id)) {
       v.cards[c.id] = { ...c, deleted: true, updatedAt: now };
+      changed = true;
     }
   }
+  return changed;
+}
+
+/**
+ * Make sure every note's ==highlights== have cloze cards — notes created or edited
+ * elsewhere (by Claude via the MCP server, or another device) only carry the text.
+ * Returns a new vault if anything changed, else undefined.
+ */
+function reconcileAutoCards(v: Vault): Vault | undefined {
+  const next = cloneVault(v);
+  const now = Date.now();
+  let changed = false;
+  const byNote = new Map<ID, Card[]>();
+  for (const c of Object.values(next.cards)) {
+    if (c.auto && !c.deleted) {
+      if (!byNote.has(c.noteId)) byNote.set(c.noteId, []);
+      byNote.get(c.noteId)!.push(c);
+    }
+  }
+  for (const n of Object.values(next.notes)) {
+    if (n.deleted && !byNote.has(n.id)) continue;
+    if (!n.deleted && !n.body.includes('==') && !byNote.has(n.id)) continue;
+    if (syncAutoCards(next, n, now)) changed = true;
+  }
+  return changed ? next : undefined;
 }
 
 export const useStore = create<State>((set, get) => {
@@ -192,6 +221,11 @@ export const useStore = create<State>((set, get) => {
         loaded: true,
         sync: { status: settings.github ? 'idle' : 'disabled', dirty: !!idbDirtyFlag() },
       });
+      const fixed = reconcileAutoCards(get().vault);
+      if (fixed) {
+        set({ vault: fixed, sync: { ...get().sync, dirty: true } });
+        schedulePersist();
+      }
       if (settings.github && settings.autoSync) void get().syncNow();
     },
 
@@ -207,7 +241,8 @@ export const useStore = create<State>((set, get) => {
     },
 
     importVault(v) {
-      set({ vault: mergeVaults(get().vault, normalizeVault(v)), sync: { ...get().sync, dirty: true } });
+      const merged = mergeVaults(get().vault, normalizeVault(v));
+      set({ vault: reconcileAutoCards(merged) ?? merged, sync: { ...get().sync, dirty: true } });
       schedulePersist();
       scheduleSync(500);
     },
@@ -401,14 +436,17 @@ export const useStore = create<State>((set, get) => {
         // Merge result with anything edited while we were syncing.
         const current = get().vault;
         const changedMeanwhile = current !== snapshot;
-        const next = changedMeanwhile ? mergeVaults(current, res.vault) : res.vault;
+        const merged = changedMeanwhile ? mergeVaults(current, res.vault) : res.vault;
+        // Pulled notes (e.g. written by Claude) may have highlights without cards yet.
+        const fixed = res.pulled ? reconcileAutoCards(merged) : undefined;
+        const dirty = changedMeanwhile || !!fixed;
         set({
-          vault: next,
-          sync: { status: 'idle', lastSync: Date.now(), dirty: changedMeanwhile },
+          vault: fixed ?? merged,
+          sync: { status: 'idle', lastSync: Date.now(), dirty },
         });
         schedulePersist();
-        markClean(!changedMeanwhile);
-        if (changedMeanwhile) scheduleSync(1500);
+        markClean(!dirty);
+        if (dirty) scheduleSync(1500);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         const offline = /Failed to fetch|NetworkError|network/i.test(msg);
@@ -463,6 +501,8 @@ if (typeof document !== 'undefined') {
     if (st.settings.github && st.settings.autoSync) void st.syncNow();
   });
 }
+
+if (import.meta.env.DEV) (window as unknown as { __recall: typeof useStore }).__recall = useStore;
 
 // ---------- Selectors / derived helpers ----------
 
