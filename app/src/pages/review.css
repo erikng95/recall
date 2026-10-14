@@ -1,0 +1,336 @@
+/* ---------- Review page ---------- */
+
+.rv-chips {
+  margin-bottom: 14px;
+}
+
+.rv-chips .chip {
+  flex-shrink: 0;
+}
+
+/* Start screen hero */
+.rv-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  margin-bottom: 12px;
+}
+
+.rv-hero::after {
+  content: '';
+  position: absolute;
+  right: -48px;
+  top: -56px;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 12%);
+  pointer-events: none;
+}
+
+.rv-hero > * {
+  position: relative;
+}
+
+.rv-hero-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.rv-hero-nums {
+  display: flex;
+  gap: 28px;
+  margin: 10px 0 18px;
+}
+
+.rv-hero-nums .stat {
+  font-size: 2.6rem;
+}
+
+.rv-hero-sub {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.rv-start {
+  width: 100%;
+  min-height: 52px;
+  background: #fff;
+  border-color: transparent;
+  color: var(--accent);
+  font-size: 1.05rem;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 15%);
+}
+
+/* All caught up / summary icon */
+.rv-caught {
+  text-align: center;
+  padding: 28px 20px;
+  margin-bottom: 12px;
+}
+
+.rv-caught h2 {
+  margin: 6px 0;
+  font-size: 1.25rem;
+}
+
+.rv-caught p {
+  margin: 6px 0;
+}
+
+.rv-caught .btn {
+  margin-top: 14px;
+}
+
+.rv-caught-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 6px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.rv-tiles .tile {
+  min-width: 0;
+}
+
+/* Session: progress and meta */
+.rv-session {
+  padding-bottom: calc(190px + var(--safe-b));
+}
+
+.rv-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 14px;
+}
+
+.rv-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.rv-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.25s ease;
+}
+
+.rv-progress .faint {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.rv-cram {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.rv-meta {
+  margin: 0 4px 10px;
+  min-width: 0;
+}
+
+.rv-note {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* Fact-check warning */
+.rv-warn {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
+  background: var(--surface);
+  font-size: 0.92rem;
+}
+
+.rv-warn > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--warn);
+}
+
+.rv-warn-text {
+  line-height: 1.5;
+}
+
+.rv-warn-text .chip {
+  vertical-align: middle;
+}
+
+/* Flashcard */
+.rv-card {
+  min-height: 40vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 28px 22px;
+  box-shadow: var(--shadow);
+}
+
+.rv-card.tap {
+  cursor: pointer;
+}
+
+.rv-card .rv-md {
+  width: 100%;
+  max-width: 60ch;
+  margin: 0 auto;
+  font-size: 1.12rem;
+}
+
+.rv-card hr.sep {
+  width: 100%;
+  max-width: 60ch;
+  margin: 18px auto;
+}
+
+/* Bottom action dock (sits above the bottom nav on mobile) */
+.rv-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-h) + var(--safe-b));
+  z-index: 25;
+  padding: 10px 16px 12px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+}
+
+.rv-dock-inner {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.rv-show {
+  width: 100%;
+  min-height: 56px;
+  font-size: 1.05rem;
+}
+
+.rv-show .kbd {
+  color: inherit;
+  opacity: 0.7;
+  border-color: currentColor;
+}
+
+.rv-ratings {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.rv-rate {
+  flex-direction: column;
+  gap: 0;
+  min-height: 60px;
+  padding: 6px 4px;
+  line-height: 1.15;
+}
+
+.rv-rate-name {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.rv-rate-ival {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.rv-easy {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+
+/* Session summary */
+.rv-summary {
+  text-align: center;
+  padding: 24px 20px;
+  margin-top: 8px;
+}
+
+.rv-summary h2 {
+  margin: 6px 0 2px;
+  font-size: 1.4rem;
+}
+
+.rv-summary .rv-caught-icon {
+  background: rgb(255 255 255 / 18%);
+  color: #fff;
+}
+
+.rv-sum {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.rv-sum .stat {
+  font-size: 1.5rem;
+}
+
+.rv-sum-label {
+  font-size: 0.78rem;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.rv-done {
+  width: 100%;
+  min-height: 52px;
+  background: #fff;
+  border-color: transparent;
+  color: var(--accent);
+}
+
+@media (min-width: 900px) {
+  .rv-dock {
+    left: 232px;
+    bottom: 0;
+  }
+
+  .rv-session {
+    padding-bottom: 160px;
+  }
+
+  .rv-card {
+    min-height: 46vh;
+  }
+}

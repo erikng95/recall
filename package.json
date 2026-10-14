@@ -1,0 +1,13 @@
+{
+  "name": "recall",
+  "private": true,
+  "type": "module",
+  "description": "Recall — a mobile-first personal knowledge bank with linking, spaced repetition and Claude-powered fact-checking",
+  "scripts": {
+    "dev": "npm --prefix app run dev",
+    "build": "npm --prefix app run build",
+    "preview": "npm --prefix app run preview",
+    "test": "npm --prefix mcp test && node scripts/test-shared.ts",
+    "mcp": "node mcp/src/index.ts"
+  }
+}
