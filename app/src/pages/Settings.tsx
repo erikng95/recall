@@ -46,38 +46,29 @@ export default function Settings() {
         <div className="section-title">
           <Sparkles size={14} /> Claude connector
         </div>
-        <div className="card muted" style={{ fontSize: '0.93rem' }}>
-          <p style={{ marginTop: 0 }}>
-            Recall's vault syncs to GitHub, and the <b>Recall MCP server</b> lets Claude Code on your computer read and update the same vault. Once it's set up (see the project README), open Claude Code and run:
-          </p>
-          <ul style={{ paddingLeft: 18 }}>
-            <li>
-              <code>/recall</code> — do everything: process inbox, fact-check, make cards, organize
-            </li>
-            <li>
-              <code>/mcp__recall__verify_claims</code> — just fact-check queued notes
-            </li>
-            <li>
-              Or just ask: <i>“what do I know about sleep?”</i>, <i>“quiz me on nutrition”</i>, <i>“link my notes about caffeine”</i>
-            </li>
-          </ul>
-          <p style={{ marginBottom: 0 }}>Changes made by Claude appear here after the next sync.</p>
+        <div className="card muted" style={{ fontSize: 'var(--step--1)' }}>
+          In Claude Code on your computer, run <code>/recall</code> to process your inbox, fact-check, build starter packs and make cards. Try <code>/mcp__recall__quiz_me</code> to be quizzed on weak spots.
         </div>
       </div>
 
       <div className="section">
         <div className="section-title">Review</div>
-        <div className="card row">
-          <span className="grow">New cards per day</span>
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={500}
-            value={settings.newCardsPerDay}
-            onChange={(e) => setSettings({ newCardsPerDay: Math.max(0, Number(e.target.value) || 0) })}
-            style={{ width: 90 }}
-          />
+        <div className="list">
+          <label className="listitem">
+            <span className="grow">Daily goal</span>
+            <input className="input num" type="number" min={1} max={500} value={settings.dailyGoal} onChange={(e) => setSettings({ dailyGoal: Math.max(1, Number(e.target.value) || 1) })} style={{ width: 84, minHeight: 38 }} />
+          </label>
+          <label className="listitem">
+            <span className="grow">New cards per day</span>
+            <input className="input num" type="number" min={0} max={500} value={settings.newCardsPerDay} onChange={(e) => setSettings({ newCardsPerDay: Math.max(0, Number(e.target.value) || 0) })} style={{ width: 84, minHeight: 38 }} />
+          </label>
+          <label className="listitem">
+            <span className="grow">
+              Type answers before revealing
+              <div className="faint">Stronger recall practice</div>
+            </span>
+            <input type="checkbox" className="switch" checked={settings.typeAnswers} onChange={(e) => setSettings({ typeAnswers: e.target.checked })} />
+          </label>
         </div>
       </div>
 

@@ -72,12 +72,20 @@ export interface Note extends BaseRecord {
   pinned?: boolean;
 }
 
+/** Things the user asked Claude to do with a whole topic. */
+export type TopicTask = 'explore';
+export type Level = 'beginner' | 'intermediate' | 'advanced';
+
 export interface Topic extends BaseRecord {
   name: string;
   parentId?: ID;
   emoji?: string;
   color?: string;
   description?: string;
+  /** 'explore' = write a starter pack of notes (or go deeper if notes exist). Claude clears it. */
+  tasks?: TopicTask[];
+  level?: Level;
+  taskNote?: string;
 }
 
 /** FSRS scheduling state, serialized (dates as epoch ms). Absent = new card. */

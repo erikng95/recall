@@ -15,6 +15,7 @@ import {
   type SourceKind,
   type Stance,
   type Topic,
+  type TopicTask,
   type Vault,
   type Verdict,
   type Verification,
@@ -41,6 +42,7 @@ export const SOURCE_KIND_VALUES = ['podcast', 'article', 'video', 'book', 'paper
 export const TASK_VALUES = ['verify', 'cards', 'organize', 'explain'] as const;
 export const STANCE_VALUES = ['supports', 'contradicts', 'context'] as const;
 export const QUALITY_VALUES = ['high', 'medium', 'low'] as const;
+export const TOPIC_TASK_VALUES = ['explore'] as const;
 
 type Equals<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 export const literalListsMatchShared: [
@@ -50,6 +52,7 @@ export const literalListsMatchShared: [
   Equals<(typeof STANCE_VALUES)[number], Stance>,
   Equals<(typeof QUALITY_VALUES)[number], NonNullable<Evidence['quality']>>,
 ] = [true, true, true, true, true];
+export const topicTaskListMatchesShared: Equals<(typeof TOPIC_TASK_VALUES)[number], TopicTask> = true;
 
 export function now(): number {
   return Date.now();
@@ -130,6 +133,16 @@ export function clearTasks(note: Note, done: ClaudeTask[]): boolean {
   if (after.length === before.length) return false;
   note.tasks = after;
   if (after.length === 0) delete note.taskNote;
+  return true;
+}
+
+/** Remove the given topic tasks. Returns true if anything changed (caller bumps updatedAt). */
+export function clearTopicTasks(topic: Topic, done: TopicTask[]): boolean {
+  const before = topic.tasks ?? [];
+  const after = before.filter((task) => !done.includes(task));
+  if (after.length === before.length) return false;
+  topic.tasks = after;
+  if (after.length === 0) delete topic.taskNote;
   return true;
 }
 

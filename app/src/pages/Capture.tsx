@@ -88,7 +88,7 @@ export default function Capture() {
       <textarea
         className="textarea capture-area"
         style={{ marginTop: 10 }}
-        placeholder={'What did you learn?\n\ne.g. “Huberman said morning sunlight within 30 min of waking helps set the circadian clock.”'}
+        placeholder="What did you learn?"
         value={text}
         onChange={(e) => setText(e.target.value)}
         autoFocus={!shared}
@@ -128,7 +128,7 @@ export default function Capture() {
       )}
 
       <div className="section">
-        <div className="section-title">When saved as a note, ask Claude to…</div>
+        <div className="section-title">Ask Claude to</div>
         <div className="claude-tasks">
           <button className={`claude-task ${tasks.has('verify') ? 'on' : ''}`} onClick={() => toggleTask('verify')}>
             <BadgeCheck size={18} /> Fact-check it
@@ -140,16 +140,13 @@ export default function Capture() {
       </div>
 
       <div className="row sticky-actions">
-        <button className="btn grow" disabled={!hasContent} onClick={saveInbox}>
+        <button className="btn grow" disabled={!hasContent} onClick={saveInbox} title="Save now, sort later">
           <InboxIcon size={18} /> Inbox
         </button>
-        <button className="btn gradient grow" disabled={!hasContent} onClick={saveNote}>
+        <button className="btn primary grow" disabled={!hasContent} onClick={saveNote}>
           <Save size={18} /> Save note
         </button>
       </div>
-      <p className="faint" style={{ textAlign: 'center', marginTop: 10 }}>
-        <b>Inbox</b> = quick dump, sort later (or let Claude do it). <b>Note</b> = goes straight into your library.
-      </p>
 
       <TopicPicker open={topicsOpen} onClose={() => setTopicsOpen(false)} selected={topicIds} onChange={setTopicIds} />
     </div>

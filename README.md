@@ -14,6 +14,8 @@ Capture a fact in seconds, have Claude fact-check it, link it to what you alread
 | **Organize** | Nested topics (e.g. *Health / Sleep*), tags, pinned notes, search (`#tag` works). |
 | **Remember** | Wrap a key fact in `==double equals==` and it automatically becomes a fill-in-the-blank flashcard. You can also write cards by hand or ask Claude for them. Reviews use FSRS, a modern spaced-repetition algorithm (Again / Hard / Good / Easy). |
 | **Verify** | Every note can carry a fact-check: verdict (Supported, Mostly supported, Mixed, Misleading, False, Unverifiable), confidence, summary and cited sources. When reviewing a card from a disputed note, you get a warning so you don't memorize misinformation. |
+| **Explore** | See what you know: mastery per topic (from your review history), fading topics, cards you keep forgetting, notes missing flashcards, and `[[links]]` to notes you haven't written yet. Browse 60 curated topics or type any subject, and Claude builds a fact-checked starter pack at your level. |
+| **Learn effectively** | Spaced repetition (FSRS), topics mixed together during review (interleaving), an optional "type your answer first" mode, practising a note right after writing it, a daily goal and streak, and warnings when a card isn't sticking. |
 | **Ask Claude** | On any note, tap *Fact-check*, *Make cards*, *Organize & link* or *Explain deeper*. Then run `/recall` in Claude Code and Claude does the work with web research and syncs it back. |
 
 ## Setup on your phone (once)
@@ -35,7 +37,7 @@ Sync is automatic: on open, a few seconds after edits, when you leave the app, a
 The `recall` MCP server is registered in Claude Code (user scope), so it's available in every session. It reads and writes the same private vault through your `gh` login.
 
 - **`/recall`**: processes the inbox into atomic, linked notes, fact-checks queued claims with web research, writes flashcards, organizes topics.
-- MCP prompts: `/mcp__recall__process_inbox`, `/mcp__recall__verify_claims` (add `all` to check everything), `/mcp__recall__do_tasks`, `/mcp__recall__tidy_vault`
+- MCP prompts: `/mcp__recall__process_inbox`, `/mcp__recall__verify_claims` (add `all` to check everything), `/mcp__recall__do_tasks`, `/mcp__recall__tidy_vault`, `/mcp__recall__explore_topic` (starter packs), `/mcp__recall__quiz_me` (Claude quizzes you on your weak spots)
 - Or just ask, e.g. *"What do I know about sleep?"*, *"Quiz me on my nutrition notes"*, *"Find contradictions in my health notes"*, *"Add a note about X with sources"*.
 
 After Claude finishes, open the app (or tap the sync icon) to pull the changes.

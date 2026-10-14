@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   BadgeCheck,
   Check,
+  ChevronRight,
   ExternalLink,
   FolderPlus,
   Layers,
@@ -10,6 +11,7 @@ import {
   MoreVertical,
   Pencil,
   Pin,
+  Play,
   Plus,
   Sparkles,
   Telescope,
@@ -29,6 +31,7 @@ import {
   type SourceRef,
 } from '@shared/vault.ts';
 import { topicPath, useStore } from '../store.ts';
+import { summarize } from '@shared/knowledge.ts';
 import Topbar from '../components/Topbar.tsx';
 import Markdown from '../components/Markdown.tsx';
 import Editor from '../components/Editor.tsx';
@@ -170,7 +173,7 @@ function NoteEditor({ note, onDone }: { note: Note; onDone: () => void }) {
         }}
         excludeTitle={note.title}
         autoFocus={!isNew}
-        placeholder={'Write what you learned…\n\n• Use [[Note title]] to link ideas\n• Wrap key facts in ==double equals== to turn them into flashcards'}
+        placeholder="Write what you learned. Highlight key facts to turn them into flashcards."
       />
       <SourceEditor note={note} />
     </div>
@@ -192,9 +195,11 @@ function SourceEditor({ note }: { note: Note }) {
   };
   const [tags, setTags] = useState(note.tags.join(', '));
   return (
-    <details className="card" style={{ marginTop: 16 }} open={!!note.source}>
-      <summary style={{ fontWeight: 700, cursor: 'pointer' }}>Source & tags</summary>
-      <div className="stack" style={{ marginTop: 12 }}>
+    <details className="disclosure" style={{ marginBlockStart: 'var(--space-l)' }} open={!!note.source}>
+      <summary>
+        Source & tags <ChevronRight size={18} className="chev" />
+      </summary>
+      <div className="stack disclosure-body">
         <div className="chips">
           {SOURCE_KINDS.map((k) => (
             <button key={k} className={`chip sm ${src.kind === k ? 'on' : ''}`} onClick={() => set({ kind: k as SourceKind })}>
@@ -246,6 +251,7 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
     return live(vault.notes).filter((n) => n.id !== note.id && !backIds.has(n.id) && re.test(n.body));
   }, [vault, note, backs]);
   const cards = useMemo(() => live(vault.cards).filter((c) => c.noteId === note.id), [vault, note.id]);
+  const known = useMemo(() => summarize([note], cards), [note, cards]);
   const topics = note.topicIds.map((t) => vault.topics[t]).filter((t) => t && !t.deleted);
   const tasks = new Set(note.tasks ?? []);
   const v = note.verification;
@@ -275,7 +281,7 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
         {note.title}
       </h1>
 
-      <div className="chips" style={{ marginBottom: 16 }}>
+      <div className="note-meta">
         {topics.map((t) => (
           <Link key={t!.id} to={`/topic/${t!.id}`} className="chip">
             {t!.emoji} {topicPath(vault, t!.id)}
@@ -321,7 +327,7 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
       {/* Ask Claude */}
       <div className="section">
         <div className="section-title">
-          <Sparkles size={14} /> Ask Claude
+          <Sparkles size={16} /> Ask Claude
         </div>
         <div className="claude-tasks">
           {TASKS.map((t) => (
@@ -334,26 +340,27 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
             </button>
           ))}
         </div>
-        {tasks.size > 0 && (
-          <p className="faint" style={{ margin: '8px 4px 0' }}>
-            Queued for Claude. Run <b>/recall</b> in Claude Code (desktop) and it'll handle these, then sync back here.
-          </p>
-        )}
       </div>
 
       {/* Cards */}
       <div className="section">
         <div className="section-title">
-          <Layers size={14} /> Flashcards ({cards.length})
+          Flashcards
+          {known.recall !== undefined && <span className="faint num">· {known.mastery}% known</span>}
           <span className="spacer" />
-          <button className="btn ghost sm" onClick={() => setCardEdit('new')}>
-            <Plus size={15} /> Add
+          {cards.length > 0 && (
+            <Link className="btn tonal sm" to={`/review?note=${note.id}`}>
+              <Play size={14} /> Practice
+            </Link>
+          )}
+          <button className="btn ghost sm" onClick={() => setCardEdit('new')} aria-label="Add flashcard">
+            <Plus size={16} />
           </button>
         </div>
         {cards.length > 0 ? (
           <div className="list">
             {cards.map((c) => (
-              <button key={c.id} className="cardpreview" style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, borderBottom: '1px solid var(--border)' }} onClick={() => setCardEdit(c)}>
+              <button key={c.id} className="cardpreview" onClick={() => setCardEdit(c)}>
                 <div className="front">
                   <Markdown source={c.front} />
                 </div>
@@ -368,8 +375,8 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
             ))}
           </div>
         ) : (
-          <p className="faint" style={{ margin: '0 4px' }}>
-            Wrap key facts in <mark style={{ background: 'var(--mark)', color: 'var(--mark-text)', borderRadius: 4, padding: '0 3px' }}>==double equals==</mark> to create cards automatically, add one manually, or ask Claude.
+          <p className="faint" style={{ margin: '0 2px' }}>
+            Highlight a key fact in the note, or add a card.
           </p>
         )}
       </div>
@@ -381,9 +388,7 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
 
       {links.length > 0 && (
         <div className="section">
-          <div className="section-title">
-            <Link2 size={14} /> Links to ({links.length})
-          </div>
+          <div className="section-title">Links</div>
           <div className="chips">
             {links.map((l) =>
               l.note ? (
@@ -393,8 +398,7 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
               ) : (
                 <button
                   key={l.title}
-                  className="chip"
-                  style={{ borderStyle: 'dashed' }}
+                  className="chip outline"
                   onClick={() => {
                     const n = useStore.getState().createNote({ title: l.title });
                     nav(`/note/${n.id}?edit=1`);
@@ -408,24 +412,20 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
         </div>
       )}
 
-      <div className="section">
-        <div className="section-title">Linked mentions ({backs.length})</div>
-        {backs.length > 0 ? (
+      {backs.length > 0 && (
+        <div className="section">
+          <div className="section-title">Mentioned in</div>
           <div className="list">
             {backs.map((b) => (
               <NoteItem key={b.id} note={b} />
             ))}
           </div>
-        ) : (
-          <p className="faint" style={{ margin: '0 4px' }}>
-            No other notes link here yet. Mention <code>[[{note.title}]]</code> in another note to connect them.
-          </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {unlinked.length > 0 && (
         <div className="section">
-          <div className="section-title">Unlinked mentions ({unlinked.length})</div>
+          <div className="section-title">Also mentioned in</div>
           <div className="list">
             {unlinked.map((u) => (
               <div key={u.id} className="listitem">

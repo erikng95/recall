@@ -10,17 +10,18 @@ import { SyncIndicator } from './Home.tsx';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
-  { id: 'pinned', label: '📌 Pinned' },
-  { id: 'claude', label: '✨ Queued for Claude' },
+  { id: 'pinned', label: 'Pinned' },
+  { id: 'claude', label: 'For Claude' },
   { id: 'unchecked', label: 'Not fact-checked' },
-  { id: 'flagged', label: '⚠️ Disputed' },
-  { id: 'verified', label: '✅ Supported' },
+  { id: 'flagged', label: 'Disputed' },
+  { id: 'verified', label: 'Supported' },
+  { id: 'nocards', label: 'No flashcards' },
   { id: 'notopic', label: 'No topic' },
 ] as const;
 
 type FilterId = (typeof FILTERS)[number]['id'];
 
-function matchFilter(n: Note, f: FilterId) {
+function matchFilter(n: Note, f: FilterId, withCards: Set<string>) {
   const verdict = n.verification?.verdict ?? 'unchecked';
   switch (f) {
     case 'pinned':
@@ -35,6 +36,8 @@ function matchFilter(n: Note, f: FilterId) {
       return ['supported', 'mostly-supported'].includes(verdict);
     case 'notopic':
       return n.topicIds.length === 0;
+    case 'nocards':
+      return !withCards.has(n.id);
     default:
       return true;
   }
@@ -81,7 +84,8 @@ export default function Library() {
   };
 
   const notes = useMemo(() => {
-    let list = live(vault.notes).filter((n) => matchFilter(n, filter));
+    const withCards = new Set(live(vault.cards).map((c) => c.noteId));
+    let list = live(vault.notes).filter((n) => matchFilter(n, filter, withCards));
     if (q.trim()) return searchNotes(list, q);
     list = [...list];
     if (sort === 'alpha') list.sort((a, b) => a.title.localeCompare(b.title));
@@ -120,12 +124,14 @@ export default function Library() {
       </div>
 
       <div className="row" style={{ margin: '12px 0' }}>
-        <button className={`chip ${tab === 'notes' ? 'on' : ''}`} onClick={() => setParam('tab', '')}>
-          <StickyNote size={15} /> Notes
-        </button>
-        <button className={`chip ${tab === 'topics' ? 'on' : ''}`} onClick={() => setParam('tab', 'topics')}>
-          <FolderTree size={15} /> Topics
-        </button>
+        <div className="segmented" role="group" aria-label="View">
+          <button aria-pressed={tab === 'notes'} onClick={() => setParam('tab', '')}>
+            <StickyNote size={15} /> Notes
+          </button>
+          <button aria-pressed={tab === 'topics'} onClick={() => setParam('tab', 'topics')}>
+            <FolderTree size={15} /> Topics
+          </button>
+        </div>
         <span className="grow" />
         {inboxCount > 0 && (
           <Link to="/inbox" className="chip">
@@ -177,14 +183,14 @@ export default function Library() {
                   <span className="emoji">{r.topic.emoji || '📁'}</span>
                   <span className="grow title">{r.topic.name}</span>
                   <span className="faint">{counts.get(r.topic.id) ?? 0}</span>
-                  <ChevronRight size={18} className="faint" />
+                  <ChevronRight size={18} className="chev" />
                 </Link>
               ))}
             </div>
           ) : (
             <div className="empty">
               <FolderTree size={36} />
-              <div>No topics yet. Add a topic from any note, or ask Claude to “Organize & link”.</div>
+              <div>No topics yet</div>
             </div>
           )}
           <NewTopicButton />

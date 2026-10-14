@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { isLeech } from '@shared/knowledge.ts';
 import { Brain, Eye, Flame, Layers, ShieldAlert, Shuffle, Sparkles, Trophy, X } from 'lucide-react';
 import { live, type Card, type ID, type Topic, type Vault } from '@shared/vault.ts';
 import Markdown from '../components/Markdown.tsx';
@@ -97,6 +98,34 @@ function settle(s: Session, v: Vault): Session {
   return { ...s, pos, revealed: false };
 }
 
+/**
+ * Interleaving: mix topics (and avoid two cards from the same note in a row)
+ * instead of reviewing one topic in a block — this strengthens retention.
+ * Round-robin across groups keyed by the note's first topic, keeping order within a group.
+ */
+function interleave(cards: Card[], v: Vault): Card[] {
+  const groups = new Map<string, Card[]>();
+  for (const c of cards) {
+    const key = v.notes[c.noteId]?.topicIds[0] ?? `note:${c.noteId}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+  const lists = [...groups.values()];
+  const out: Card[] = [];
+  let i = 0;
+  while (out.length < cards.length) {
+    const list = lists[i % lists.length];
+    if (list.length) {
+      // prefer a card from a different note than the previous one
+      const prev = out[out.length - 1];
+      const idx = prev ? Math.max(0, list.findIndex((c) => c.noteId !== prev.noteId)) : 0;
+      out.push(list.splice(idx, 1)[0]);
+    }
+    i++;
+  }
+  return out;
+}
+
 function buildSnapshot(v: Vault, now: number, topicParam: string, newPerDay: number): Snapshot {
   const activeTopic = topicParam && v.topics[topicParam] && !v.topics[topicParam].deleted ? topicParam : '';
   const topicSet = activeTopic ? topicWithDescendants(v, activeTopic) : null;
@@ -151,7 +180,8 @@ function buildSnapshot(v: Vault, now: number, topicParam: string, newPerDay: num
   }
   due.sort((a, b) => (a.srs?.due ?? 0) - (b.srs?.due ?? 0));
   unseen.sort((a, b) => a.createdAt - b.createdAt);
-  const fresh = unseen.slice(0, newLeft);
+  const fresh = interleave(unseen.slice(0, newLeft), v);
+  const dueMixed = interleave(due, v);
 
   // Topics that have cards, plus their ancestors (filtering a parent includes its children).
   const withCards = new Set<ID>();
@@ -178,7 +208,7 @@ function buildSnapshot(v: Vault, now: number, topicParam: string, newPerDay: num
     newLeft,
     unseenNew: unseen.length,
     scoped,
-    due,
+    due: dueMixed,
     fresh,
     nextDue,
     topicChips,
@@ -199,6 +229,8 @@ export default function Review() {
   const newPerDay = useStore((s) => s.settings.newCardsPerDay);
   const [params, setParams] = useSearchParams();
   const topicParam = params.get('topic') ?? '';
+  const noteParam = params.get('note') ?? '';
+  const typeAnswers = useStore((s) => s.settings.typeAnswers);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -232,6 +264,21 @@ export default function Review() {
   );
 
   const setTopic = (id: string) => setParams(id ? { topic: id } : {}, { replace: true });
+
+  // Practice one note (e.g. right after learning it): due/new cards are scheduled
+  // normally; if none are due, run them as practice without touching the schedule.
+  const startedForNote = useRef('');
+  useEffect(() => {
+    if (!noteParam || startedForNote.current === noteParam) return;
+    startedForNote.current = noteParam;
+    const v = useStore.getState().vault;
+    const cards = live(v.cards).filter((c) => c.noteId === noteParam && !c.suspended && isLiveCard(v, c));
+    if (!cards.length) return;
+    const t = Date.now();
+    const ready = cards.filter((c) => !c.srs || c.srs.due <= t);
+    if (ready.length) begin('review', ready.map((c) => c.id));
+    else begin('cram', shuffle(cards).map((c) => c.id));
+  }, [noteParam, begin]);
   const startReview = () => begin('review', [...snap.due, ...snap.fresh].map((c) => c.id));
   const startCram = () => begin('cram', shuffle(snap.scoped).slice(0, CRAM_SIZE).map((c) => c.id));
   const exit = () => commit(null);
@@ -330,7 +377,7 @@ export default function Review() {
       {showSummary && session && <Summary session={session} onDone={exit} />}
 
       {inSession && session && card && (
-        <SessionView session={session} card={card} vault={vault} onReveal={reveal} onRate={rate} />
+        <SessionView key={session.pos} session={session} card={card} vault={vault} typeAnswers={typeAnswers} onReveal={reveal} onRate={rate} />
       )}
     </div>
   );
@@ -447,15 +494,18 @@ function SessionView({
   session,
   card,
   vault,
+  typeAnswers,
   onReveal,
   onRate,
 }: {
   session: Session;
   card: Card;
   vault: Vault;
+  typeAnswers: boolean;
   onReveal: () => void;
   onRate: (r: RatingValue) => void;
 }) {
+  const [typed, setTyped] = useState('');
   const note = vault.notes[card.noteId];
   const cram = session.mode === 'cram';
   const paths = note.topicIds
@@ -479,7 +529,7 @@ function SessionView({
 
       {cram && (
         <div className="rv-cram">
-          <Shuffle size={14} /> Practice mode: nothing is recorded
+          <Shuffle size={14} /> Practice · not scheduled
         </div>
       )}
 
@@ -494,8 +544,7 @@ function SessionView({
         <div className="rv-warn" role="note">
           <ShieldAlert size={18} />
           <div className="rv-warn-text">
-            Heads up: this was fact-checked as <VerdictBadge v={note.verification} small />. Double-check it before you
-            memorize it.
+            Fact-check: <VerdictBadge v={note.verification} small />
           </div>
         </div>
       )}
@@ -512,10 +561,22 @@ function SessionView({
         {session.revealed && (
           <>
             <hr className="sep" />
+            {typeAnswers && typed.trim() && (
+              <p className="rv-typed">
+                <span className="faint">You wrote</span> {typed.trim()}
+              </p>
+            )}
             <Markdown source={card.back} className="rv-md" />
           </>
         )}
       </article>
+
+
+      {isLeech(card) && session.revealed && (
+        <Link to={`/note/${note.id}`} className="rv-leech faint">
+          Forgotten {card.srs?.lapses}× — try rewriting this card or splitting it up
+        </Link>
+      )}
 
       <div className="rv-dock">
         <div className="rv-dock-inner">
@@ -535,9 +596,27 @@ function SessionView({
               ))}
             </div>
           ) : (
+            <>
+              {typeAnswers && (
+                <textarea
+                  className="textarea rv-answer"
+                  rows={1}
+                  placeholder="Type your answer…"
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      (e.target as HTMLTextAreaElement).blur();
+                      onReveal();
+                    }
+                  }}
+                />
+              )}
             <button type="button" className="btn primary rv-show" onClick={onReveal}>
               Show answer <span className="kbd hide-mobile">Space</span>
             </button>
+            </>
           )}
         </div>
       </div>

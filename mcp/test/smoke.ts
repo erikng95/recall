@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { emptyVault, newId, type Note, type Vault, type InboxItem } from '../../shared/vault.ts';
+import { emptyVault, newId, type Card, type ID, type InboxItem, type Note, type SrsState, type Topic, type Vault } from '../../shared/vault.ts';
 
 const INDEX = fileURLToPath(new URL('../src/index.ts', import.meta.url));
 
@@ -27,6 +27,18 @@ function check(name: string, cond: boolean, detail?: string): void {
 interface ToolOut {
   isError: boolean;
   text: string;
+}
+
+/** Bullet lines ("- ...") under a "## Heading" line, up to the next "## " heading. */
+function bulletsUnder(text: string, heading: string): string[] {
+  const start = text.indexOf(heading);
+  if (start < 0) return [];
+  const out: string[] = [];
+  for (const line of text.slice(start + heading.length).split('\n')) {
+    if (line.startsWith('## ')) break;
+    if (line.startsWith('- ')) out.push(line);
+  }
+  return out;
 }
 
 function textOf(content: unknown): string {
@@ -124,9 +136,11 @@ async function main(): Promise<void> {
       'create_topic',
       'process_inbox_item',
       'delete_note',
+      'knowledge_profile',
+      'complete_topic_task',
     ].sort();
     check(
-      'tools/list exposes all 14 tools',
+      'tools/list exposes all 16 tools',
       JSON.stringify(toolNames) === JSON.stringify(expectedTools),
       `got ${toolNames.join(', ')}`,
     );
@@ -134,8 +148,8 @@ async function main(): Promise<void> {
     const prompts = await client.listPrompts();
     const promptNames = prompts.prompts.map((p) => p.name).sort();
     check(
-      'prompts/list exposes the 4 prompts',
-      JSON.stringify(promptNames) === JSON.stringify(['do_tasks', 'process_inbox', 'tidy_vault', 'verify_claims']),
+      'prompts/list exposes the 6 prompts',
+      JSON.stringify(promptNames) === JSON.stringify(['do_tasks', 'explore_topic', 'process_inbox', 'quiz_me', 'tidy_vault', 'verify_claims']),
       `got ${promptNames.join(', ')}`,
     );
 
@@ -375,6 +389,159 @@ async function main(): Promise<void> {
     check('final overview: 2 flashcards', r.text.includes('Flashcards: 2'), r.text);
     check('final overview: 0 inbox waiting', r.text.includes('New inbox items: 0'), r.text);
 
+    // ---- phase 2: topic task + knowledge fixtures ----
+    // Written into the same vault file after the core checks above, so the exact counts there stay meaningful.
+    const day = 86_400_000;
+    const nowMs = Date.now();
+    const vf = readFile();
+    const rootTopicId = newId();
+    const stagesTopicId = newId();
+    vf.topics[rootTopicId] = {
+      id: rootTopicId,
+      name: 'Sleep science',
+      createdAt: t0,
+      updatedAt: t0,
+      tasks: ['explore'],
+      level: 'beginner',
+      taskNote: 'Focus on the mechanisms',
+    } satisfies Topic;
+    vf.topics[stagesTopicId] = {
+      id: stagesTopicId,
+      name: 'Stages',
+      parentId: rootTopicId,
+      createdAt: t0,
+      updatedAt: t0,
+    } satisfies Topic;
+
+    const addNote = (title: string, body: string, topicId: ID): ID => {
+      const id = newId();
+      vf.notes[id] = { id, title, body, topicIds: [topicId], tags: [], createdAt: t0, updatedAt: t0 } satisfies Note;
+      return id;
+    };
+    const stagesNoteId = addNote(
+      'Sleep has distinct stages',
+      'Sleep cycles through ==N1, N2, N3 and REM== stages. Background: [[Circadian rhythm]].',
+      stagesTopicId,
+    );
+    const melatoninNoteId = addNote(
+      'Melatonin is released in the evening',
+      'Light suppresses ==melatonin== release.\n\nSee [[Circadian rhythm]].',
+      rootTopicId,
+    );
+    const caffeineNoteId = addNote(
+      'Caffeine half-life is about five hours',
+      'Caffeine has a ==half-life of about five hours== in adults.',
+      rootTopicId,
+    );
+    const napNoteId = addNote('Naps restore alertness', 'A ==20-minute nap== improves alertness.', rootTopicId);
+
+    const addCard = (noteId: ID, front: string, back: string, srs: Partial<SrsState>): void => {
+      const id = newId();
+      const state: SrsState = {
+        due: nowMs,
+        stability: 1,
+        difficulty: 5,
+        elapsed_days: 0,
+        scheduled_days: 1,
+        learning_steps: 0,
+        reps: 1,
+        lapses: 0,
+        state: 2,
+        ...srs,
+      };
+      vf.cards[id] = { id, noteId, kind: 'basic', front, back, createdBy: 'me', createdAt: t0, updatedAt: t0, srs: state } satisfies Card;
+    };
+    // Well remembered: stability 30 days, reviewed yesterday.
+    addCard(stagesNoteId, 'What are the stages of a sleep cycle?', 'N1, N2, N3 and REM', {
+      stability: 30,
+      last_review: nowMs - day,
+      due: nowMs + 29 * day,
+      elapsed_days: 1,
+      scheduled_days: 30,
+      reps: 6,
+    });
+    // Fading: reviewed 10 days ago with stability 2 days.
+    addCard(melatoninNoteId, 'What does evening light do to melatonin release?', 'It suppresses it', {
+      stability: 2,
+      last_review: nowMs - 10 * day,
+      due: nowMs - 8 * day,
+      elapsed_days: 10,
+      scheduled_days: 2,
+      reps: 3,
+      lapses: 1,
+    });
+    // Leech: forgotten five times.
+    addCard(caffeineNoteId, 'How long is the half-life of caffeine?', 'About five hours', {
+      stability: 1,
+      last_review: nowMs - 3 * day,
+      due: nowMs - 2 * day,
+      elapsed_days: 3,
+      scheduled_days: 1,
+      reps: 9,
+      lapses: 7,
+    });
+    writeFileSync(file, JSON.stringify(vf, null, 2), 'utf8');
+
+    r = await call('vault_overview');
+    check('overview counts the topic with a pending task', r.text.includes('Topics with pending tasks: 1'), r.text);
+    check('overview shows overall mastery and its label', /Overall mastery: \d+% \((Not started|Learning|Getting there|Solid|Mastered)\)/.test(r.text), r.text);
+    check('overview counts 9 notes and 5 flashcards after the fixtures', r.text.includes('Notes: 9') && r.text.includes('Flashcards: 5'), r.text);
+
+    r = await call('list_pending_tasks');
+    check('list_pending_tasks shows the topic with its explore task', r.text.includes('## Sleep science') && r.text.includes(`id: ${rootTopicId}`) && r.text.includes('tasks: explore'), r.text);
+    check('list_pending_tasks explains the explore task', r.text.includes('explore — Write a starter pack') && r.text.includes('complete_topic_task'), r.text);
+    check('topic entry has level and task note', r.text.includes('level: beginner') && r.text.includes('Focus on the mechanisms'), r.text);
+    check('topic entry lists notes already in its subtree', r.text.includes('"Sleep has distinct stages"') && r.text.includes('"Naps restore alertness"'), r.text);
+    check('topic entry has a one-line knowledge summary', /knowledge: mastery \d+% \(/.test(r.text), r.text);
+
+    r = await call('complete_topic_task', { topicId: rootTopicId, task: 'explore' });
+    check('complete_topic_task clears the explore task', !r.isError && r.text.includes('Cleared'), r.text);
+    const doneTopic = readFile().topics[rootTopicId];
+    check(
+      'complete_topic_task persists: no tasks left and taskNote removed',
+      (doneTopic.tasks ?? []).length === 0 && doneTopic.taskNote === undefined,
+      JSON.stringify(doneTopic),
+    );
+    check('complete_topic_task bumps updatedAt', doneTopic.updatedAt > t0);
+
+    r = await call('list_pending_tasks');
+    check('list_pending_tasks no longer lists the topic', r.text.startsWith('No pending tasks'), r.text);
+
+    r = await call('complete_topic_task', { topicId: rootTopicId, task: 'explore' });
+    check('completing a topic task that is not pending is not an error', !r.isError && r.text.includes('was not pending'), r.text);
+
+    r = await call('complete_topic_task', { topicId: 'no-such-topic', task: 'explore' });
+    check('complete_topic_task unknown topic is a tool error', r.isError === true, r.text);
+
+    r = await call('vault_overview');
+    check('overview: 0 topics with pending tasks after completion', r.text.includes('Topics with pending tasks: 0'), r.text);
+
+    r = await call('knowledge_profile');
+    check('knowledge_profile succeeds for the whole vault', !r.isError && r.text.startsWith('Knowledge profile: whole vault'), r.text);
+    check('knowledge_profile reports mastery and leeches', /Mastery: \d+% \(/.test(r.text) && r.text.includes('Leeches: 1'), r.text);
+    check(
+      'knowledge_profile lists the leech card with its note',
+      r.text.includes('"How long is the half-life of caffeine?" — note "Caffeine half-life is about five hours", 7 lapses'),
+      r.text,
+    );
+    check('knowledge_profile lists missing notes with reference count', r.text.includes('[[Circadian rhythm]] — linked from 2 notes') && r.text.includes('[[Missing thing]]'), r.text);
+    check('knowledge_profile lists notes without flashcards', bulletsUnder(r.text, '## Notes without flashcards').some((l) => l.includes('Naps restore alertness')), r.text);
+    check('knowledge_profile topic table includes subtopics', r.text.includes('| Sleep science/Stages |'), r.text);
+
+    r = await call('knowledge_profile', { topic: 'Sleep science', limit: 3 });
+    check('knowledge_profile scoped by topic path', !r.isError && r.text.startsWith('Knowledge profile: Sleep science'), r.text);
+    check('scoped profile leaves out notes outside the topic', !r.text.includes('Missing thing') && !r.text.includes('DNA stores genes'), r.text);
+    const weakest = bulletsUnder(r.text, '## Weakest notes');
+    check(
+      'weakest notes: the well-remembered note comes last',
+      weakest.length === 3 && weakest[2].includes('Sleep has distinct stages'),
+      weakest.join('\n'),
+    );
+    check('scoped profile has the topic row with its subtopic row', r.text.includes('| Sleep science |') && r.text.includes('| Sleep science/Stages |'), r.text);
+
+    r = await call('knowledge_profile', { topic: 'Nope/Nothing' });
+    check('knowledge_profile unknown topic is a tool error', r.isError === true, r.text);
+
     // ---- prompts ----
     const pi = await client.getPrompt({ name: 'process_inbox' });
     check('process_inbox prompt renders', textOf(pi.messages.map((m) => m.content)).includes('list_inbox'));
@@ -389,9 +556,42 @@ async function main(): Promise<void> {
 
     const dt = await client.getPrompt({ name: 'do_tasks' });
     check('do_tasks prompt renders', textOf(dt.messages.map((m) => m.content)).includes('list_pending_tasks'));
+    check('do_tasks also covers explore topic tasks', textOf(dt.messages.map((m) => m.content)).includes('complete_topic_task'));
 
     const tv = await client.getPrompt({ name: 'tidy_vault' });
     check('tidy_vault prompt renders', textOf(tv.messages.map((m) => m.content)).includes('Broken links'));
+
+    const epAll = await client.getPrompt({ name: 'explore_topic', arguments: {} });
+    const epAllText = textOf(epAll.messages.map((m) => m.content));
+    check(
+      'explore_topic without args handles every topic with an explore task',
+      epAllText.includes('every topic with an "explore" task') && epAllText.includes('complete_topic_task') && epAllText.includes('knowledge_profile'),
+      epAllText,
+    );
+
+    const epTopic = await client.getPrompt({ name: 'explore_topic', arguments: { topic: 'Sleep science' } });
+    const epTopicText = textOf(epTopic.messages.map((m) => m.content));
+    check(
+      'explore_topic with a topic targets it and creates it if missing',
+      epTopicText.includes('the topic "Sleep science"') && epTopicText.includes('create_topic') && epTopicText.includes('set_verification'),
+      epTopicText,
+    );
+
+    const qzAll = await client.getPrompt({ name: 'quiz_me', arguments: {} });
+    const qzAllText = textOf(qzAll.messages.map((m) => m.content));
+    check(
+      'quiz_me without args quizzes the whole vault, one question at a time',
+      qzAllText.includes('the whole vault') && qzAllText.includes('ONE question at a time') && qzAllText.includes('knowledge_profile.'),
+      qzAllText,
+    );
+
+    const qzTopic = await client.getPrompt({ name: 'quiz_me', arguments: { topic: 'Sleep science' } });
+    const qzTopicText = textOf(qzTopic.messages.map((m) => m.content));
+    check(
+      'quiz_me with a topic scopes knowledge_profile to it and stays grounded',
+      qzTopicText.includes('the topic "Sleep science"') && qzTopicText.includes('knowledge_profile with topic "Sleep science"') && qzTopicText.includes('Never present an invented fact'),
+      qzTopicText,
+    );
   } finally {
     await client.close();
   }

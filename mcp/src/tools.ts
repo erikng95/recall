@@ -16,6 +16,7 @@ import {
   type Note,
   type Vault,
 } from '../../shared/vault.ts';
+import { vaultKnowledge } from '../../shared/knowledge.ts';
 import { StorageConfigError, type Storage } from './storage.ts';
 import {
   QUALITY_VALUES,
@@ -23,10 +24,12 @@ import {
   SOURCE_KIND_VALUES,
   STANCE_VALUES,
   TASK_VALUES,
+  TOPIC_TASK_VALUES,
   VERDICT_VALUES,
   appendMarkdown,
   cardsOf,
   clearTasks,
+  clearTopicTasks,
   effectiveVerdict,
   fail,
   getOwn,
@@ -42,7 +45,17 @@ import {
   topicSubtree,
   topicTreeLines,
 } from './model.ts';
-import { formatNote, formatPendingHeader, formatPendingNote, iso, noteListItem, verdictLabel } from './format.ts';
+import {
+  formatKnowledgeProfile,
+  formatNote,
+  formatPendingHeader,
+  formatPendingNote,
+  formatPendingTopic,
+  formatPendingTopicHeader,
+  iso,
+  noteListItem,
+  verdictLabel,
+} from './format.ts';
 
 // ---------- zod schemas ----------
 
@@ -76,6 +89,7 @@ const verificationInputSchema = z.object({
 });
 
 const taskSchema = z.enum(TASK_VALUES).describe('verify | cards | organize | explain');
+const topicTaskSchema = z.enum(TOPIC_TASK_VALUES).describe('explore = write a starter pack for the topic.');
 
 // ---------- result helpers ----------
 
@@ -113,7 +127,8 @@ export function registerTools(server: McpServer, storage: Storage): void {
       title: 'Vault overview',
       description:
         'Start here. Summarizes the Recall vault: counts of notes, topics, flashcards (and how many are due now), ' +
-        'new inbox items, notes with pending Claude tasks, and notes never fact-checked, then the topic tree with note counts. Read-only.',
+        'new inbox items, notes with pending Claude tasks, topics waiting for a starter pack, and notes never fact-checked, ' +
+        'then overall mastery (what the user knows, from flashcard scheduling) and the topic tree with note counts. Read-only.',
       inputSchema: {},
     },
     () =>
@@ -125,16 +140,20 @@ export function registerTools(server: McpServer, storage: Storage): void {
         const cards = live(v.cards);
         const inbox = live(v.inbox).filter((i) => i.status === 'new');
         const pending = notes.filter((n) => (n.tasks?.length ?? 0) > 0);
+        const pendingTopics = topics.filter((tp) => (tp.tasks?.length ?? 0) > 0);
         const unchecked = notes.filter((n) => !n.verification || n.verification.verdict === 'unchecked');
         const due = cards.filter((c) => !c.suspended && (!c.srs || c.srs.due <= t));
+        const knowledge = vaultKnowledge(v, t);
 
         const lines = [
           `Vault: ${storage.describe()}`,
           `Notes: ${notes.length}`,
           `Topics: ${topics.length}`,
           `Flashcards: ${cards.length} (due now: ${due.length})`,
+          `Overall mastery: ${knowledge.mastery}% (${knowledge.label})`,
           `New inbox items: ${inbox.length}`,
           `Notes with pending Claude tasks: ${pending.length}`,
+          `Topics with pending tasks: ${pendingTopics.length}`,
           `Notes never fact-checked: ${unchecked.length}`,
           '',
           'Topic tree (note counts are direct, not including subtopics):',
@@ -142,6 +161,7 @@ export function registerTools(server: McpServer, storage: Storage): void {
         ];
         const next: string[] = [];
         if (inbox.length) next.push('Next: list_inbox to see captured items, or run the process_inbox prompt.');
+        if (pendingTopics.length) next.push('Next: list_pending_tasks, or run the explore_topic prompt to write starter packs.');
         if (pending.length) next.push('Next: list_pending_tasks, or run the do_tasks prompt.');
         if (next.length) lines.push('', ...next);
         return lines.join('\n');
@@ -273,8 +293,9 @@ export function registerTools(server: McpServer, storage: Storage): void {
     {
       title: 'List pending tasks',
       description:
-        'Every note the user has flagged for Claude (tasks: verify, cards, organize, explain), with its full body, source, ' +
-        'existing verification and the user\'s task note. Explains what each task means. Start here for the do_tasks workflow.',
+        'Everything the user has flagged for Claude. Notes with tasks (verify, cards, organize, explain) come with their full body, source, ' +
+        'existing verification and the user\'s task note. Topics with an explore task (a starter pack request) come with their level, ' +
+        'task note, existing notes and a knowledge summary. Explains what each task means. Start here for the do_tasks and explore_topic workflows.',
       inputSchema: {},
     },
     () =>
@@ -283,8 +304,48 @@ export function registerTools(server: McpServer, storage: Storage): void {
         const pending = live(v.notes)
           .filter((n) => (n.tasks?.length ?? 0) > 0)
           .sort((a, b) => a.createdAt - b.createdAt);
-        if (!pending.length) return 'No pending tasks. Nothing is flagged for Claude.';
-        return [formatPendingHeader(pending.length), ...pending.map((n) => formatPendingNote(v, n))].join('\n\n');
+        const pendingTopics = live(v.topics)
+          .filter((t) => (t.tasks?.length ?? 0) > 0)
+          .sort((a, b) => a.createdAt - b.createdAt);
+        if (!pending.length && !pendingTopics.length) return 'No pending tasks. Nothing is flagged for Claude.';
+
+        const sections: string[] = [];
+        if (pending.length) {
+          sections.push([formatPendingHeader(pending.length), ...pending.map((n) => formatPendingNote(v, n))].join('\n\n'));
+        }
+        if (pendingTopics.length) {
+          sections.push(
+            [formatPendingTopicHeader(pendingTopics.length), ...pendingTopics.map((t) => formatPendingTopic(v, t))].join('\n\n'),
+          );
+        }
+        return sections.join('\n\n---\n\n');
+      }),
+  );
+
+  server.registerTool(
+    'knowledge_profile',
+    {
+      title: 'Knowledge profile',
+      description:
+        'What the user knows, from their flashcard history: overall and per-topic mastery (0-100%, with a label), note and card counts, ' +
+        'cards due now, mature, fading (recall under 80%) and leech cards, recall right now, retention over the last 30 days, review streak, ' +
+        'reviews today; then the weakest notes, leech cards, notes without flashcards and missing notes (linked but not written). ' +
+        'Read-only. Use it to tailor explanations to what the user already knows, to decide what to quiz (see the quiz_me prompt), and to suggest what to learn next. ' +
+        'Pass a topic to limit everything to that topic and its subtopics.',
+      inputSchema: {
+        topic: z.string().optional().describe('Topic id or path, e.g. "Science/Biology". Default: whole vault. Includes subtopics.'),
+        limit: z.number().int().min(1).max(50).optional().describe('Max items per list. Default 10.'),
+      },
+    },
+    (args) =>
+      run(async () => {
+        const v = await storage.read();
+        let scopeId: ID | undefined;
+        if (args.topic !== undefined) {
+          scopeId = resolveTopicRef(v, args.topic, false);
+          if (!scopeId) fail(`Topic "${args.topic}" not found. Use list_topics to see valid paths and ids.`);
+        }
+        return formatKnowledgeProfile(v, scopeId, args.limit ?? 10, now());
       }),
   );
 
@@ -486,6 +547,8 @@ export function registerTools(server: McpServer, storage: Storage): void {
       title: 'Add flashcards',
       description:
         'Create 1-10 flashcards for a note. Each card tests ONE fact: question on the front, concise answer on the back, both in plain markdown. ' +
+        'Mix plain factual recall cards (what, which, how many) with a few "why" or "how" elaboration cards that test understanding ' +
+        '(e.g. "Why does cold exposure raise heart rate?"). Keep one idea per card. ' +
         'Skip anything the note does not clearly support. Check get_note first so you do not duplicate existing cards. Clears the "cards" task.',
       inputSchema: {
         noteId: z.string(),
@@ -549,6 +612,35 @@ export function registerTools(server: McpServer, storage: Storage): void {
           const left = note.tasks ?? [];
           return `Cleared "${task}" on "${note.title}". Remaining tasks: ${left.length ? left.join(', ') : 'none'}.`;
         }, `Claude: complete ${args.task} on ${args.noteId}`),
+      ),
+  );
+
+  server.registerTool(
+    'complete_topic_task',
+    {
+      title: 'Complete topic task',
+      description:
+        'Clear a pending topic task after its work is done: "explore" once the starter pack is written (see the explore_topic prompt). ' +
+        'Clears the topic task note too once no tasks remain. Pass the topic id or path.',
+      inputSchema: {
+        topicId: z.string().describe('Topic id or path.'),
+        task: topicTaskSchema,
+      },
+    },
+    (args) =>
+      run(() =>
+        storage.mutate((v) => {
+          const id = resolveTopicRef(v, args.topicId, false);
+          const topic = id ? liveTopic(v, id) : undefined;
+          if (!topic) fail(`No topic "${args.topicId}". Use list_topics to see valid paths and ids.`);
+          const path = topicPath(v, topic.id);
+          if (!clearTopicTasks(topic, [args.task])) {
+            return `"${args.task}" was not pending on "${path}". Nothing changed.`;
+          }
+          topic.updatedAt = now();
+          const left = topic.tasks ?? [];
+          return `Cleared "${args.task}" on topic "${path}". Remaining topic tasks: ${left.length ? left.join(', ') : 'none'}.`;
+        }, `Claude: complete topic ${args.task} on ${args.topicId}`),
       ),
   );
 

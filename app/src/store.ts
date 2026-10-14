@@ -14,6 +14,7 @@ import {
   type ClaudeTask,
   type ID,
   type InboxItem,
+  type Level,
   type Note,
   type ReviewLog,
   type SrsState,
@@ -29,12 +30,16 @@ export interface Settings {
   github?: GitHubConfig;
   autoSync: boolean;
   newCardsPerDay: number;
+  /** Reviews per day to aim for. */
+  dailyGoal: number;
+  /** Type the answer before revealing it (stronger retrieval practice). */
+  typeAnswers: boolean;
 }
 
 const SETTINGS_KEY = 'recall.settings';
 
 function loadSettings(): Settings {
-  const defaults: Settings = { theme: 'auto', autoSync: true, newCardsPerDay: 20 };
+  const defaults: Settings = { theme: 'auto', autoSync: true, newCardsPerDay: 20, dailyGoal: 20, typeAnswers: false };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...defaults, ...(JSON.parse(raw) as Partial<Settings>) };
@@ -83,6 +88,11 @@ interface State {
 
   // topics
   createTopic(name: string, parentId?: ID, emoji?: string): Topic;
+  /** Find-or-create a "A/B/C" topic path; returns the leaf. */
+  ensureTopicPath(path: string, emoji?: string): Topic | undefined;
+  /** Ask Claude to build a starter pack (or go deeper) for a topic. */
+  requestExplore(topicId: ID, level: Level, taskNote?: string): void;
+  cancelExplore(topicId: ID): void;
   updateTopic(id: ID, patch: Partial<Omit<Topic, 'id' | 'createdAt'>>): void;
   deleteTopic(id: ID): void;
 
@@ -336,6 +346,27 @@ export const useStore = create<State>((set, get) => {
       return topic;
     },
 
+    ensureTopicPath(path, emoji) {
+      const parts = path
+        .split('/')
+        .map((p) => p.trim())
+        .filter(Boolean);
+      let parent: Topic | undefined;
+      parts.forEach((name, i) => {
+        parent = get().createTopic(name, parent?.id, i === parts.length - 1 ? emoji : undefined);
+      });
+      if (parent && emoji && !parent.emoji) get().updateTopic(parent.id, { emoji });
+      return parent;
+    },
+
+    requestExplore(topicId, level, taskNote) {
+      get().updateTopic(topicId, { tasks: ['explore'], level, taskNote });
+    },
+
+    cancelExplore(topicId) {
+      get().updateTopic(topicId, { tasks: [], taskNote: undefined });
+    },
+
     updateTopic(id, patch) {
       mutate((v) => {
         const cur = v.topics[id];
@@ -532,6 +563,22 @@ export function topicWithDescendants(v: Vault, id: ID): Set<ID> {
     }
   }
   return out;
+}
+
+/** Find a topic by "A/B/C" path (case-insensitive), without creating anything. */
+export function findTopicByPath(v: Vault, path: string): Topic | undefined {
+  const parts = path
+    .split('/')
+    .map((p) => normalizeTitle(p))
+    .filter(Boolean);
+  let parent: string | undefined;
+  let found: Topic | undefined;
+  for (const name of parts) {
+    found = live(v.topics).find((t) => normalizeTitle(t.name) === name && (t.parentId ?? undefined) === parent);
+    if (!found) return undefined;
+    parent = found.id;
+  }
+  return found;
 }
 
 export function isDue(c: Card, now = Date.now()): boolean {

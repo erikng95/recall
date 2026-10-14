@@ -184,15 +184,25 @@ export interface GraphColors {
 
 /** Read the current theme's colours from the CSS variables on :root. */
 export function readColors(): GraphColors {
-  const cs = getComputedStyle(document.documentElement);
-  const read = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
-  return {
+  // Tokens are light-dark()/color-mix() expressions; resolve them to concrete colours
+  // through a probe element so the canvas gets values it can parse.
+  const probe = document.createElement('span');
+  probe.style.display = 'none';
+  document.body.appendChild(probe);
+  const read = (name: string, fallback: string) => {
+    probe.style.color = fallback;
+    probe.style.color = `var(${name})`;
+    return getComputedStyle(probe).color || fallback;
+  };
+  const colors = {
     text: read('--text', '#171a26'),
     muted: read('--text-3', '#8b90a5'),
     accent: read('--accent', '#4f46e5'),
     bg: read('--bg', '#f6f7fb'),
     border: read('--border', '#e3e5ee'),
   };
+  probe.remove();
+  return colors;
 }
 
 /** Theme colours for the canvas; re-read (and the caller re-rendered) whenever <html data-theme> changes. */

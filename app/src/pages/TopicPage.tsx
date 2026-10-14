@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Brain, ChevronRight, FilePlus2, Pencil, Trash2 } from 'lucide-react';
+import { Brain, ChevronRight, FilePlus2, Pencil, Sparkles, Trash2 } from 'lucide-react';
+import { summarize } from '@shared/knowledge.ts';
+import { MasteryPill, Ring } from '../components/Knowledge.tsx';
 import { live } from '@shared/vault.ts';
 import { isDue, topicPath, topicWithDescendants, useStore } from '../store.ts';
 import Topbar from '../components/Topbar.tsx';
@@ -32,7 +34,7 @@ export default function TopicPage() {
       .filter((t) => t.parentId === id)
       .sort((a, b) => a.name.localeCompare(b.name));
     const checked = notes.filter((n) => n.verification && n.verification.verdict !== 'unchecked').length;
-    return { notes, cards, due, children, checked };
+    return { notes, cards, due, children, checked, k: summarize(notes, Object.values(vault.cards)) };
   }, [vault, id, topic, includeSub]);
 
   if (!topic || topic.deleted || !data) {
@@ -45,6 +47,8 @@ export default function TopicPage() {
   }
 
   const path = topicPath(vault, id).split(' / ');
+  const k = data.k;
+  const queued = (topic.tasks ?? []).includes('explore');
 
   return (
     <div className="page">
@@ -64,17 +68,38 @@ export default function TopicPage() {
       </h1>
       {topic.description && <p className="muted" style={{ margin: '0 2px 12px' }}>{topic.description}</p>}
 
-      <div className="grid2" style={{ margin: '12px 0' }}>
-        <div className="tile">
-          <span className="stat">{data.notes.length}</span>
-          <span className="faint">notes · {data.checked} fact-checked</span>
+      <div className="card" style={{ marginBlock: 'var(--space-s)' }}>
+        <div className="row" style={{ gap: 16 }}>
+          <Ring pct={k.mastery} size={68} />
+          <div className="grow">
+            <MasteryPill label={k.label} />
+            <div className="faint num" style={{ marginBlockStart: 6 }}>
+              {k.notes} notes · {k.cards} cards · {data.checked} fact-checked
+            </div>
+          </div>
         </div>
-        <Link to={`/review?topic=${id}`} className="tile">
-          <span className="stat">{data.due}</span>
-          <span className="faint">
-            <Brain size={13} /> cards to review · {data.cards.length} total
-          </span>
-        </Link>
+        <div className="row" style={{ marginBlockStart: 'var(--space-s)' }}>
+          {k.cards > 0 && (
+            <Link to={`/review?topic=${id}`} className={`btn sm grow ${k.due > 0 ? 'primary' : ''}`}>
+              <Brain size={15} /> {k.due > 0 ? `Review ${k.due}` : 'Review'}
+            </Link>
+          )}
+          {queued ? (
+            <button className="btn sm grow tonal" onClick={() => useStore.getState().cancelExplore(id)}>
+              <Sparkles size={15} /> Queued · cancel
+            </button>
+          ) : (
+            <button
+              className="btn sm grow tonal"
+              onClick={() => {
+                useStore.getState().requestExplore(id, topic.level ?? 'beginner');
+                toast('Queued for Claude');
+              }}
+            >
+              <Sparkles size={15} /> {data.notes.length ? 'Go deeper' : 'Starter pack'}
+            </button>
+          )}
+        </div>
       </div>
 
       {data.children.length > 0 && (
@@ -85,7 +110,7 @@ export default function TopicPage() {
               <Link key={c.id} to={`/topic/${c.id}`} className="listitem">
                 <span className="emoji">{c.emoji || '📁'}</span>
                 <span className="grow title">{c.name}</span>
-                <ChevronRight size={18} className="faint" />
+                <ChevronRight size={18} className="chev" />
               </Link>
             ))}
           </div>

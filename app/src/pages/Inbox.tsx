@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Archive, Check, ExternalLink, FileText, Inbox as InboxIcon, Sparkles, Trash2, Undo2 } from 'lucide-react';
+import { Archive, Check, ExternalLink, FileText, Inbox as InboxIcon, Trash2, Undo2 } from 'lucide-react';
 import { live, type InboxItem } from '@shared/vault.ts';
 import { useStore } from '../store.ts';
 import Topbar from '../components/Topbar.tsx';
@@ -28,14 +28,11 @@ export default function Inbox() {
   return (
     <div className="page">
       <Topbar title="Inbox" back />
-      <p className="muted" style={{ margin: '0 4px 12px', fontSize: '0.92rem' }}>
-        Raw captures land here. Turn them into notes yourself, or run <b>/recall</b> in Claude Code to have Claude split them into linked, fact-checked notes.
-      </p>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <button className={`chip ${!showDone ? 'on' : ''}`} onClick={() => setShowDone(false)}>
+      <div className="segmented" role="group" aria-label="Filter" style={{ marginBlockEnd: 'var(--space-s)' }}>
+        <button aria-pressed={!showDone} onClick={() => setShowDone(false)}>
           To process
         </button>
-        <button className={`chip ${showDone ? 'on' : ''}`} onClick={() => setShowDone(true)}>
+        <button aria-pressed={showDone} onClick={() => setShowDone(true)}>
           Processed
         </button>
       </div>
@@ -116,11 +113,6 @@ function InboxCard({ item }: { item: InboxItem }) {
           </button>
         )}
         <span className="grow" />
-        {item.status === 'new' && (
-          <span className="faint" title="Claude processes inbox items when you run /recall">
-            <Sparkles size={13} /> Claude-ready
-          </span>
-        )}
         <button
           className="iconbtn"
           aria-label="Delete"

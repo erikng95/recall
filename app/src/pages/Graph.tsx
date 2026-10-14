@@ -240,7 +240,7 @@ export default function Graph() {
 
   return (
     <div className="page wide gr-page">
-      <Topbar title="Graph">
+      <Topbar title="Graph" back>
         <button type="button" className="iconbtn" aria-label="Fit graph to screen" title="Fit to screen" onClick={() => graphRef.current?.zoomToFit(400, 70)}>
           <Maximize2 size={19} />
         </button>
